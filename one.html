@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>6x6 Sudoku Solver</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f0f0;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        .sudoku-container {
+            margin: 20px auto;
+            background: white;
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            max-width: 400px;
+        }
+        .grid {
+            display: inline-grid;
+            grid-template-columns: repeat(6, 60px);
+            grid-template-rows: repeat(6, 60px);
+            gap: 1px;
+            background-color: #333;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .cell {
+            width: 60px;
+            height: 60px;
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            border: none;
+            background: white;
+            outline: none;
+        }
+        .cell:focus {
+            background-color: #e3f2fd;
+            box-shadow: inset 0 0 0 2px #2196f3;
+        }
+        .pre-filled {
+            background-color: #ffcdd2;
+            color: #d32f2f;
+            font-weight: bolder;
+            pointer-events: none;
+        }
+        .controls {
+            margin-top: 20px;
+        }
+        button {
+            background: #4caf50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            margin: 0 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        button:hover {
+            background: #45a049;
+        }
+        #message {
+            margin-top: 10px;
+            font-weight: bold;
+            min-height: 20px;
+        }
+        .block-border {
+            background-color: #333;
+        }
+    </style>
+</head>
+<body>
+    <h1>6×6 Sudoku Solver</h1>
+    <p>Fill the grid or click Solve to complete the puzzle using backtracking algorithm.</p>
+    <div class="sudoku-container">
+        <div class="grid" id="grid"></div>
+        <div class="controls">
+            <button onclick="solveSudoku()">Solve</button>
+            <button onclick="clearGrid()">Clear</button>
+        </div>
+        <div id="message"></div>
+    </div>
+
+    <script>
+        const SIZE = 6;
+        const BLOCK_SIZE = 2; // For 2x3 blocks in 6x6, but simplified to rows/cols check; adjust for custom blocks if needed
+
+        // The given puzzle from the image
+        const puzzle = [
+            [5, 3, 0, 0, 0, 0],
+            [6, 0, 0, 1, 9, 5],
+            [0, 9, 8, 0, 0, 0],
+            [8, 0, 0, 0, 6, 0],
+            [4, 0, 0, 8, 0, 3],
+            [7, 0, 2, 0, 0, 0]
+        ];
+
+        let board = []; // Will hold the current board state
+        const cells = []; // To store cell references
+
+        function showMessage(text, isError = false) {
+            const msg = document.getElementById('message');
+            msg.textContent = text;
+            msg.style.color = isError ? 'red' : 'green';
+        }
+
+        function createGrid() {
+            const grid = document.getElementById('grid');
+            grid.innerHTML = '';
+            cells.length = 0;
+            board = puzzle.map(row => [...row]);
+
+            for (let i = 0; i < SIZE; i++) {
+                for (let j = 0; j < SIZE; j++) {
+                    const cell = document.createElement('input');
+                    cell.type = 'text';
+                    cell.classList.add('cell');
+                    cell.maxLength = 1;
+                    if (board[i][j] !== 0) {
+                        cell.value = board[i][j];
+                        cell.classList.add('pre-filled');
+                    } else {
+                        cell.addEventListener('input', (e) => {
+                            const val = e.target.value;
+                            e.target.value = val.replace(/[^1-6]/g, '').slice(0,1);
+                            if (val && val >=1 && val <=6) {
+                                board[i][j] = parseInt(val);
+                            } else {
+                                board[i][j] = 0;
+                            }
+                        });
+                    }
+                    cells.push(cell);
+                    grid.appendChild(cell);
+                }
+            }
+            showMessage('Grid loaded. Enter numbers or solve!');
+        }
+
+        function isValid(row, col, num) {
+            // Check row
+            for (let j = 0; j < SIZE; j++) {
+                if (board[row][j] === num) return false;
+            }
+            // Check column
+            for (let i = 0; i < SIZE; i++) {
+                if (board[i][col] === num) return false;
+            }
+            // Check 2x3 blocks (for standard 6x6)
+            const blockRow = Math.floor(row / BLOCK_SIZE);
+            const blockCol = Math.floor(col / 3);
+            for (let i = 0; i < BLOCK_SIZE; i++) {
+                for (let j = 0; j < 3; j++) {
+                    if (board[blockRow * BLOCK_SIZE + i][blockCol * 3 + j] === num) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function solveSudokuUtil(row, col) {
+            if (row === SIZE) return true; // All rows filled
+
+            let nextRow = row;
+            let nextCol = col + 1;
+            if (nextCol === SIZE) {
+                nextRow++;
+                nextCol = 0;
+            }
+
+            if (board[row][col] !== 0) {
+                return solveSudokuUtil(nextRow, nextCol);
+            }
+
+            for (let num = 1; num <= SIZE; num++) {
+                if (isValid(row, col, num)) {
+                    board[row][col] = num;
+                    if (solveSudokuUtil(nextRow, nextCol)) {
+                        return true;
+                    }
+                    board[row][col] = 0;
+                }
+            }
+            return false;
+        }
+
+        function solveSudoku() {
+            // Copy original puzzle to board if changed
+            board = cells.map((cell, idx) => {
+                const val = cell.value;
+                return val && !isNaN(val) ? parseInt(val) : 0;
+            }).reduce((acc, val, idx) => {
+                const row = Math.floor(idx / SIZE);
+                const col = idx % SIZE;
+                if (!acc[row]) acc[row] = [];
+                acc[row][col] = val;
+                return acc;
+            }, []);
+
+            showMessage('Solving...');
+            if (solveSudokuUtil(0, 0)) {
+                // Update cells
+                cells.forEach((cell, idx) => {
+                    const row = Math.floor(idx / SIZE);
+                    const col = idx % SIZE;
+                    if (cell.classList.contains('pre-filled')) {
+                        // Keep original
+                    } else {
+                        cell.value = board[row][col];
+                        cell.classList.add('pre-filled');
+                    }
+                });
+                showMessage('Solved!');
+            } else {
+                showMessage('No solution exists!', true);
+            }
+        }
+
+        function clearGrid() {
+            board = puzzle.map(row => [...row]);
+            createGrid();
+        }
+
+        // Initialize
+        createGrid();
+    </script>
+</body>
+</html>
