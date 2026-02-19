@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>6x6 Sudoku Solver & Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f0f0;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        .sudoku-container {
+            margin: 20px auto;
+            background: white;
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            max-width: 400px;
+        }
+        .grid {
+            display: inline-grid;
+            grid-template-columns: repeat(6, 60px);
+            grid-template-rows: repeat(6, 60px);
+            gap: 1px;
+            background-color: #333;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .cell {
+            width: 60px;
+            height: 60px;
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            border: none;
+            background: white;
+            outline: none;
+        }
+        .cell:focus {
+            background-color: #e3f2fd;
+            box-shadow: inset 0 0 0 2px #2196f3;
+        }
+        .pre-filled {
+            background-color: #ffcdd2;
+            color: #d32f2f;
+            font-weight: bolder;
+            pointer-events: none;
+        }
+        .controls {
+            margin-top: 20px;
+        }
+        button {
+            background: #4caf50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            margin: 0 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        button:hover {
+            background: #45a049;
+        }
+        #message {
+            margin-top: 10px;
+            font-weight: bold;
+            min-height: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>6×6 Sudoku Solver & Generator</h1>
+    <p>Load your puzzle, generate new, fill manually, or solve!</p>
+    <div class="sudoku-container">
+        <div class="grid" id="grid"></div>
+        <div class="controls">
+            <button onclick="loadOriginal()">Original</button>
+            <button onclick="generateNewPuzzle()">New Puzzle</button>
+            <button onclick="solveSudoku()">Solve</button>
+            <button onclick="clearGrid()">Clear</button>
+        </div>
+        <div id="message"></div>
+    </div>
+
+    <script>
+        const SIZE = 6;
+        const BLOCK_ROWS = 2;
+        const BLOCK_COLS = 3;
+
+        // Original puzzle
+        const originalPuzzle = [
+            [5, 3, 0, 0, 0, 0],
+            [6, 0, 0, 1, 9, 5],
+            [0, 9, 8, 0, 0, 0],
+            [8, 0, 0, 0, 6, 0],
+            [4, 0, 0, 8, 0, 3],
+            [7, 0, 2, 0, 0, 0]
+        ];
+
+        let currentBoard = []; // Current full solution for puzzle generation
+        let cells = []; // Cell references
+
+        function showMessage(text, isError = false) {
+            const msg = document.getElementById('message');
+            msg.textContent = text;
+            msg.style.color = isError ? 'red' : 'green';
+        }
+
+        function createGrid(givens) {
+            const grid = document.getElementById('grid');
+            grid.innerHTML = '';
+            cells.length = 0;
+
+            for (let i = 0; i < SIZE; i++) {
+                for (let j = 0; j < SIZE; j++) {
+                    const cell = document.createElement('input');
+                    cell.type = 'text';
+                    cell.classList.add('cell');
+                    cell.maxLength = 1;
+                    if (givens[i][j] !== 0) {
+                        cell.value = givens[i][j];
+                        cell.classList.add('pre-filled');
+                    } else {
+                        cell.addEventListener('input', (e) => {
+                            const val = e.target.value;
+                            e.target.value = val.replace(/[^1-6]/g, '').slice(0,1);
+                        });
+                    }
+                    cells.push(cell);
+                    grid.appendChild(cell);
+                }
+            }
+        }
+
+        function isValid(board, row, col, num) {
+            // Row
+            for (let j = 0; j < SIZE; j++) if (board[row][j] === num) return false;
+            // Column
+            for (let i = 0; i < SIZE; i++) if (board[i][col] === num) return false;
+            // Block
+            const blockRowStart = Math.floor(row / BLOCK_ROWS) * BLOCK_ROWS;
+            const blockColStart = Math.floor(col / BLOCK_COLS) * BLOCK_COLS;
+            for (let i = 0; i < BLOCK_ROWS; i++) {
+                for (let j = 0; j < BLOCK_COLS; j++) {
+                    if (board[blockRowStart + i][blockColStart + j] === num) return false;
+                }
+            }
+            return true;
+        }
+
+        function solveUtil(board, row, col) {
+            if (row === SIZE) return true;
+            let nextRow = row, nextCol = col + 1;
+            if (nextCol === SIZE) { nextRow++; nextCol = 0; }
+            if (board[row][col] !== 0) return solveUtil(board, nextRow, nextCol);
+            for (let num = 1; num <= SIZE; num++) {
+                if (isValid(board, row, col, num)) {
+                    board[row][col] = num;
+                    if (solveUtil(board, nextRow, nextCol)) return true;
+                    board[row][col] = 0;
+                }
+            }
+            return false;
+        }
+
+        function solveSudoku() {
+            let givens = cells.map((cell, idx) => {
+                const val = parseInt(cell.value) || 0;
+                return val;
+            }).reduce((acc, val, idx) => {
+                const r = Math.floor(idx / SIZE), c = idx % SIZE;
+                if (!acc[r]) acc[r] = [];
+                acc[r][c] = val;
+                return acc;
+            }, []);
+
+            if (solveUtil(givens, 0, 0)) {
+                cells.forEach((cell, idx) => {
+                    const r = Math.floor(idx / SIZE), c = idx % SIZE;
+                    if (!cell.classList.contains('pre-filled') || cell.value === '') {
+                        cell.value = givens[r][c];
+                        cell.classList.add('pre-filled');
+                    }
+                });
+                showMessage('Solved!');
+                currentBoard = givens;
+            } else {
+                showMessage('No solution!', true);
+            }
+        }
+
+        function loadOriginal() {
+            const givens = originalPuzzle.map(r => [...r]);
+            createGrid(givens);
+            showMessage('Original puzzle loaded.');
+        }
+
+        function generateNewPuzzle() {
+            // Create a full solved board
+            let newBoard = Array(SIZE).fill().map(() => Array(SIZE).fill(0));
+            solveUtil(newBoard, 0, 0); // Generates a random solution due to backtracking order
+            currentBoard = newBoard;
+
+            // Remove 20-25 cells for a solvable puzzle (adjust for difficulty)
+            const numToRemove = 22;
+            for (let i = 0; i < numToRemove; i++) {
+                const row = Math.floor(Math.random() * SIZE);
+                const col = Math.floor(Math.random() * SIZE);
+                if (newBoard[row][col] !== 0) {
+                    newBoard[row][col] = 0;
+                }
+            }
+
+            createGrid(newBoard);
+            showMessage('New random puzzle generated!');
+        }
+
+        function clearGrid() {
+            cells.forEach(cell => {
+                if (!cell.classList.contains('pre-filled')) {
+                    cell.value = '';
+                    cell.classList.remove('pre-filled');
+                }
+            });
+            showMessage('Empties cleared.');
+        }
+
+        // Load original on start
+        loadOriginal();
+    </script>
+</body>
+</html>
