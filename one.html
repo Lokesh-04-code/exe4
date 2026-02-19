@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>6x6 Sudoku Solver</title>
+    <title>6x6 Sudoku Solver & Generator</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -73,17 +73,16 @@
             font-weight: bold;
             min-height: 20px;
         }
-        .block-border {
-            background-color: #333;
-        }
     </style>
 </head>
 <body>
-    <h1>6×6 Sudoku Solver</h1>
-    <p>Fill the grid or click Solve to complete the puzzle using backtracking algorithm.</p>
+    <h1>6×6 Sudoku Solver & Generator</h1>
+    <p>Load your puzzle, generate new, fill manually, or solve!</p>
     <div class="sudoku-container">
         <div class="grid" id="grid"></div>
         <div class="controls">
+            <button onclick="loadOriginal()">Original</button>
+            <button onclick="generateNewPuzzle()">New Puzzle</button>
             <button onclick="solveSudoku()">Solve</button>
             <button onclick="clearGrid()">Clear</button>
         </div>
@@ -92,10 +91,11 @@
 
     <script>
         const SIZE = 6;
-        const BLOCK_SIZE = 2; // For 2x3 blocks in 6x6, but simplified to rows/cols check; adjust for custom blocks if needed
+        const BLOCK_ROWS = 2;
+        const BLOCK_COLS = 3;
 
-        // The given puzzle from the image
-        const puzzle = [
+        // Original puzzle
+        const originalPuzzle = [
             [5, 3, 0, 0, 0, 0],
             [6, 0, 0, 1, 9, 5],
             [0, 9, 8, 0, 0, 0],
@@ -104,8 +104,8 @@
             [7, 0, 2, 0, 0, 0]
         ];
 
-        let board = []; // Will hold the current board state
-        const cells = []; // To store cell references
+        let currentBoard = []; // Current full solution for puzzle generation
+        let cells = []; // Cell references
 
         function showMessage(text, isError = false) {
             const msg = document.getElementById('message');
@@ -113,11 +113,10 @@
             msg.style.color = isError ? 'red' : 'green';
         }
 
-        function createGrid() {
+        function createGrid(givens) {
             const grid = document.getElementById('grid');
             grid.innerHTML = '';
             cells.length = 0;
-            board = puzzle.map(row => [...row]);
 
             for (let i = 0; i < SIZE; i++) {
                 for (let j = 0; j < SIZE; j++) {
@@ -125,69 +124,46 @@
                     cell.type = 'text';
                     cell.classList.add('cell');
                     cell.maxLength = 1;
-                    if (board[i][j] !== 0) {
-                        cell.value = board[i][j];
+                    if (givens[i][j] !== 0) {
+                        cell.value = givens[i][j];
                         cell.classList.add('pre-filled');
                     } else {
                         cell.addEventListener('input', (e) => {
                             const val = e.target.value;
                             e.target.value = val.replace(/[^1-6]/g, '').slice(0,1);
-                            if (val && val >=1 && val <=6) {
-                                board[i][j] = parseInt(val);
-                            } else {
-                                board[i][j] = 0;
-                            }
                         });
                     }
                     cells.push(cell);
                     grid.appendChild(cell);
                 }
             }
-            showMessage('Grid loaded. Enter numbers or solve!');
         }
 
-        function isValid(row, col, num) {
-            // Check row
-            for (let j = 0; j < SIZE; j++) {
-                if (board[row][j] === num) return false;
-            }
-            // Check column
-            for (let i = 0; i < SIZE; i++) {
-                if (board[i][col] === num) return false;
-            }
-            // Check 2x3 blocks (for standard 6x6)
-            const blockRow = Math.floor(row / BLOCK_SIZE);
-            const blockCol = Math.floor(col / 3);
-            for (let i = 0; i < BLOCK_SIZE; i++) {
-                for (let j = 0; j < 3; j++) {
-                    if (board[blockRow * BLOCK_SIZE + i][blockCol * 3 + j] === num) {
-                        return false;
-                    }
+        function isValid(board, row, col, num) {
+            // Row
+            for (let j = 0; j < SIZE; j++) if (board[row][j] === num) return false;
+            // Column
+            for (let i = 0; i < SIZE; i++) if (board[i][col] === num) return false;
+            // Block
+            const blockRowStart = Math.floor(row / BLOCK_ROWS) * BLOCK_ROWS;
+            const blockColStart = Math.floor(col / BLOCK_COLS) * BLOCK_COLS;
+            for (let i = 0; i < BLOCK_ROWS; i++) {
+                for (let j = 0; j < BLOCK_COLS; j++) {
+                    if (board[blockRowStart + i][blockColStart + j] === num) return false;
                 }
             }
             return true;
         }
 
-        function solveSudokuUtil(row, col) {
-            if (row === SIZE) return true; // All rows filled
-
-            let nextRow = row;
-            let nextCol = col + 1;
-            if (nextCol === SIZE) {
-                nextRow++;
-                nextCol = 0;
-            }
-
-            if (board[row][col] !== 0) {
-                return solveSudokuUtil(nextRow, nextCol);
-            }
-
+        function solveUtil(board, row, col) {
+            if (row === SIZE) return true;
+            let nextRow = row, nextCol = col + 1;
+            if (nextCol === SIZE) { nextRow++; nextCol = 0; }
+            if (board[row][col] !== 0) return solveUtil(board, nextRow, nextCol);
             for (let num = 1; num <= SIZE; num++) {
-                if (isValid(row, col, num)) {
+                if (isValid(board, row, col, num)) {
                     board[row][col] = num;
-                    if (solveSudokuUtil(nextRow, nextCol)) {
-                        return true;
-                    }
+                    if (solveUtil(board, nextRow, nextCol)) return true;
                     board[row][col] = 0;
                 }
             }
@@ -195,44 +171,69 @@
         }
 
         function solveSudoku() {
-            // Copy original puzzle to board if changed
-            board = cells.map((cell, idx) => {
-                const val = cell.value;
-                return val && !isNaN(val) ? parseInt(val) : 0;
+            let givens = cells.map((cell, idx) => {
+                const val = parseInt(cell.value) || 0;
+                return val;
             }).reduce((acc, val, idx) => {
-                const row = Math.floor(idx / SIZE);
-                const col = idx % SIZE;
-                if (!acc[row]) acc[row] = [];
-                acc[row][col] = val;
+                const r = Math.floor(idx / SIZE), c = idx % SIZE;
+                if (!acc[r]) acc[r] = [];
+                acc[r][c] = val;
                 return acc;
             }, []);
 
-            showMessage('Solving...');
-            if (solveSudokuUtil(0, 0)) {
-                // Update cells
+            if (solveUtil(givens, 0, 0)) {
                 cells.forEach((cell, idx) => {
-                    const row = Math.floor(idx / SIZE);
-                    const col = idx % SIZE;
-                    if (cell.classList.contains('pre-filled')) {
-                        // Keep original
-                    } else {
-                        cell.value = board[row][col];
+                    const r = Math.floor(idx / SIZE), c = idx % SIZE;
+                    if (!cell.classList.contains('pre-filled') || cell.value === '') {
+                        cell.value = givens[r][c];
                         cell.classList.add('pre-filled');
                     }
                 });
                 showMessage('Solved!');
+                currentBoard = givens;
             } else {
-                showMessage('No solution exists!', true);
+                showMessage('No solution!', true);
             }
         }
 
-        function clearGrid() {
-            board = puzzle.map(row => [...row]);
-            createGrid();
+        function loadOriginal() {
+            const givens = originalPuzzle.map(r => [...r]);
+            createGrid(givens);
+            showMessage('Original puzzle loaded.');
         }
 
-        // Initialize
-        createGrid();
+        function generateNewPuzzle() {
+            // Create a full solved board
+            let newBoard = Array(SIZE).fill().map(() => Array(SIZE).fill(0));
+            solveUtil(newBoard, 0, 0); // Generates a random solution due to backtracking order
+            currentBoard = newBoard;
+
+            // Remove 20-25 cells for a solvable puzzle (adjust for difficulty)
+            const numToRemove = 22;
+            for (let i = 0; i < numToRemove; i++) {
+                const row = Math.floor(Math.random() * SIZE);
+                const col = Math.floor(Math.random() * SIZE);
+                if (newBoard[row][col] !== 0) {
+                    newBoard[row][col] = 0;
+                }
+            }
+                
+            createGrid(newBoard);
+            showMessage('New random puzzle generated!');
+        }
+
+        function clearGrid() {
+            cells.forEach(cell => {
+                if (!cell.classList.contains('pre-filled')) {
+                    cell.value = '';
+                    cell.classList.remove('pre-filled');
+                }
+            });
+            showMessage('Empties cleared.');
+        }
+
+        // Load original on start
+        loadOriginal();
     </script>
 </body>
 </html>
